@@ -1,0 +1,543 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport" />
+    <title>Metabox Configurator Demo</title>
+    <meta
+      name="description"
+      content="Interactive Metabox configurator demo with Vue 3: choose products, environments, materials, and export renders/PDF."
+    />
+    <link href="style.css" rel="stylesheet" />
+
+    <script type="importmap">
+      {
+        "imports": {
+          "vue": "https://unpkg.com/vue@3/dist/vue.esm-browser.js"
+        }
+      }
+    </script>
+
+    <script type="module">
+      import {
+        GetCallToActionInformation,
+        GetPdf,
+        GetScreenshot,
+        integrateMetabox,
+        saveImage,
+        SetEnvironment,
+        SetEnvironmentMaterial,
+        SetProduct,
+        SetProductMaterial,
+        PlayShowcase,
+        PauseShowcase,
+        InitShowcase,
+        StopShowcase,
+      } from 'https://cdn.jsdelivr.net/npm/@3dsource/metabox-front-api@latest/+esm';
+      import { createApp } from 'vue';
+
+      class Shim {
+        state = null;
+        ecomConfigurator = null;
+        product = null;
+        products = null;
+        environments = null;
+        productSlots = null;
+        environmentSlots = null;
+        productMaterialsIds = null;
+        showcasePlaying = false;
+        showcaseInitialized = false;
+        api = {};
+
+        ready(api) {
+          this.api = api;
+          this.addApiEventListeners();
+        }
+
+        addApiEventListeners() {
+          this.api.addEventListener('configuratorDataUpdated', (data) => {
+            this.updateConfiguratorData(data);
+            // Auto-start showcase on first load
+            if (!this.showcaseInitialized && this.state?.productId) {
+              setTimeout(() => {
+                this.api.sendCommandToMetabox(new InitShowcase());
+                this.showcaseInitialized = true;
+                this.showcasePlaying = true;
+              }, 1500);
+            }
+          });
+          this.api.addEventListener('ecomConfiguratorDataUpdated', (data) => {
+            this.updateEcomConfiguratorData(data);
+          });
+          this.api.addEventListener('screenshotReady', (data) => {
+            saveImage(data, 'Render.png');
+          });
+        }
+
+        updateConfiguratorData(data) {
+          const {
+            productId,
+            configurator,
+            productMaterialsIds,
+            environmentId,
+            environmentMaterialsIds,
+          } = data;
+
+          this.productMaterialsIds = productMaterialsIds;
+          if (
+            !productId ||
+            !configurator ||
+            Object.keys(this.productMaterialsIds).length === 0
+          ) {
+            return;
+          }
+
+          this.state = data;
+          this.products =
+            configurator.products?.map((item) => item.product) || [];
+          this.environments =
+            configurator.environments?.map((item) => item.environment) || [];
+          this.product = this.products.find(
+            (product) => product.id === productId,
+          );
+          const environment = this.environments.find(
+            (env) => env.id === environmentId,
+          );
+          this.productSlots =
+            this.product?.slots.filter(
+              (slot) => slot.enabledMaterials.length > 0,
+            ) || [];
+          this.environmentSlots = environment?.slots.filter(
+            (slot) => slot.enabledMaterials.length > 0,
+          );
+
+        }
+        updateEcomConfiguratorData(data) {
+          this.ecomConfigurator = data;
+        }
+        sendProduct(productId) {
+          this.api.sendCommandToMetabox(new SetProduct(productId));
+        }
+        sendEnvironment(environmentId) {
+          this.api.sendCommandToMetabox(new SetEnvironment(environmentId));
+        }
+        sendProductMaterial(slotId, materialId) {
+          this.api.sendCommandToMetabox(
+            new SetProductMaterial(slotId, materialId),
+          );
+        }
+        sendEnvironmentMaterial(slotId, materialId) {
+          this.api.sendCommandToMetabox(
+            new SetEnvironmentMaterial(slotId, materialId),
+          );
+        }
+        getRender(size) {
+          this.api.sendCommandToMetabox(new GetScreenshot('image/png', size));
+        }
+        getPDF() {
+          this.api.sendCommandToMetabox(new GetPdf());
+        }
+        getCtaInformation() {
+          this.api.sendCommandToMetabox(new GetCallToActionInformation());
+        }
+        toggleShowcase() {
+          if (this.showcasePlaying) {
+            // Switch to manual mode
+            this.api.sendCommandToMetabox(new StopShowcase());
+            this.showcasePlaying = false;
+          } else {
+            // Switch to showcase mode
+            if (!this.showcaseInitialized) {
+              this.api.sendCommandToMetabox(new InitShowcase());
+              this.showcaseInitialized = true;
+            } else {
+              this.api.sendCommandToMetabox(new PlayShowcase());
+            }
+            this.showcasePlaying = true;
+          }
+        }
+      }
+
+      createApp({
+        data() {
+          return {
+            shim: new Shim(),
+            paintPanelCollapsed: true,
+            sceneryPanelCollapsed: true,
+            infoPanelCollapsed: true,
+            environmentThumbnails: {
+              'Bronco Parking': 'https://metabox-api.3dsource.com/uploads/render/eb449d94-ec27-4a29-bd48-1aa929346fbb/result.png',
+              'Meta Car Roof': 'https://metabox-api.3dsource.com/uploads/render/d1fc558e-ecc1-4ef8-a5d8-2df32887acee/result.png',
+              'Mountain Road': 'https://metabox-api.3dsource.com/uploads/render/78ea26ce-3b8a-4417-ac55-1a0257f0990e/result.png'
+            }
+          };
+        },
+        mounted() {
+          integrateMetabox(
+            '2afbb936-53bf-43bd-bc8b-75cb4fe00a3e',
+            'embed3DSource',
+            (api) => {
+              this.shim.ready(api);
+            },
+            {
+              standalone: true,
+              introImage: 'https://metabox-api.3dsource.com/uploads/render/a215d817-dd59-4c60-ae55-4991eda870bc/result.png',
+              loadingImage: 'https://metabox-api.3dsource.com/uploads/render/a215d817-dd59-4c60-ae55-4991eda870bc/result.png',
+            },
+          );
+        },
+        methods: {
+          openPaintPanel() {
+            this.paintPanelCollapsed = false;
+            this.sceneryPanelCollapsed = true;
+            this.infoPanelCollapsed = true;
+          },
+          openSceneryPanel() {
+            this.sceneryPanelCollapsed = false;
+            this.paintPanelCollapsed = true;
+            this.infoPanelCollapsed = true;
+          },
+          openInfoPanel() {
+            this.infoPanelCollapsed = false;
+            this.paintPanelCollapsed = true;
+            this.sceneryPanelCollapsed = true;
+          },
+          setManualMode() {
+            if (this.shim.showcasePlaying) {
+              this.shim.api.sendCommandToMetabox(new StopShowcase());
+              this.shim.showcasePlaying = false;
+            }
+          },
+          setShowcaseMode() {
+            if (!this.shim.showcasePlaying) {
+              if (!this.shim.showcaseInitialized) {
+                this.shim.api.sendCommandToMetabox(new InitShowcase());
+                this.shim.showcaseInitialized = true;
+              } else {
+                this.shim.api.sendCommandToMetabox(new PlayShowcase());
+              }
+              this.shim.showcasePlaying = true;
+            }
+          }
+        },
+      }).mount('#app');
+    </script>
+  </head>
+  <body>
+    <noscript>
+      <strong>This app requires JavaScript to run. Please enable JavaScript in your browser.</strong>
+    </noscript>
+
+    <div class="container" id="app">
+      <!-- Full-screen 3D Viewport -->
+      <div id="embed3DSource"></div>
+
+      <!-- Loading Overlay -->
+      <div class="loading-overlay fade-in" v-if="!shim.state">
+        <div class="loading-content glass-panel">
+          <h3>Loading Experience...</h3>
+        </div>
+      </div>
+
+      <!-- Main Interface (shown when loaded) -->
+      <template v-if="shim.state">
+        <!-- Top Bar - Logo -->
+        <div class="top-bar glass-panel fade-in">
+          <img src="./images/logo.png" alt="Logo" class="logo-image" />
+        </div>
+
+        <!-- Icon Bar Menu -->
+        <div class="icon-bar glass-panel fade-in">
+          <!-- Top Icons -->
+          <div class="icon-group-top">
+            <div class="icon-group-label">Options</div>
+            <!-- Paint Icon -->
+            <button
+              class="icon-button"
+              :class="{ active: !paintPanelCollapsed }"
+              @click="openPaintPanel()"
+              title="Paint"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M18.37 2.63l3 3-10 10-4 1 1-4 10-10z"/>
+                <path d="M16 5l3 3"/>
+                <path d="M8 13l-5 5c-1 1-1 2.5 0 3.5s2.5 1 3.5 0l5-5"/>
+              </svg>
+            </button>
+
+            <!-- Scenery Icon -->
+            <button
+              class="icon-button"
+              :class="{ active: !sceneryPanelCollapsed }"
+              @click="openSceneryPanel()"
+              title="Scenery"
+              v-if="shim.environmentSlots"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
+                <circle cx="12" cy="10" r="3"/>
+              </svg>
+            </button>
+          </div>
+
+          <!-- Bottom Icons -->
+          <div class="icon-group-bottom">
+            <div class="icon-group-label">Mode</div>
+            <!-- Manual Mode -->
+            <button
+              class="icon-button"
+              :class="{ active: !shim.showcasePlaying }"
+              @click="setManualMode()"
+              :disabled="!shim.product?.showcase"
+              title="Manual Mode"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="7" y1="9" x2="7" y2="15"/>
+                <line x1="12" y1="7" x2="12" y2="10"/>
+                <line x1="12" y1="14" x2="12" y2="17"/>
+                <line x1="17" y1="9" x2="17" y2="15"/>
+                <line x1="7" y1="12" x2="17" y2="12"/>
+              </svg>
+            </button>
+
+            <!-- Showcase Mode -->
+            <button
+              class="icon-button"
+              :class="{ active: shim.showcasePlaying }"
+              @click="setShowcaseMode()"
+              :disabled="!shim.product?.showcase"
+              title="Showcase Mode"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M23 7l-7 5 7 5V7z"/>
+                <rect x="1" y="5" width="15" height="14" rx="2"/>
+              </svg>
+            </button>
+
+            <!-- Divider -->
+            <div class="icon-group-divider"></div>
+
+            <div class="icon-group-label">Info</div>
+
+            <!-- Info Icon -->
+            <button
+              class="icon-button"
+              :class="{ active: !infoPanelCollapsed }"
+              @click="openInfoPanel()"
+              title="Info"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="12" y1="16" x2="12" y2="12"/>
+                <line x1="12" y1="8" x2="12.01" y2="8"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <!-- Paint Panel (Slides out from icon bar) -->
+        <div class="slide-panel paint-slide-panel glass-panel" v-if="!paintPanelCollapsed">
+          <div class="panel-header">
+            <h3>Paint</h3>
+            <button class="close-button" @click="paintPanelCollapsed = true">✕</button>
+          </div>
+
+          <div class="panel-content">
+            <!-- Paint Options -->
+            <div class="options-section" v-if="shim.productSlots && shim.productSlots.length > 0">
+              <div class="options">
+                <button
+                  type="button"
+                  :key="material.id"
+                  :class="{ active: shim.productMaterialsIds?.[shim.state.productId]?.[shim.productSlots[0].id] === material.id }"
+                  @click="shim.sendProductMaterial(shim.productSlots[0].id, material.id)"
+                  v-for="material in shim.productSlots[0].enabledMaterials"
+                >
+                  <img
+                    v-if="material.thumbnailList && material.thumbnailList.length > 1"
+                    :src="material.thumbnailList[1].urlPath"
+                    :alt="material.title"
+                    class="material-thumbnail"
+                  />
+                  <div
+                    v-else-if="material.color"
+                    class="material-thumbnail"
+                    :style="{ backgroundColor: material.color }"
+                  ></div>
+                  <span class="material-name">{{ material.title }}</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Other Product Materials (if any) -->
+            <div
+              class="options-section"
+              v-for="(slot, index) in shim.productSlots"
+              :key="slot.id"
+              v-if="index > 0"
+            >
+              <div class="sub-section-header">{{ slot.label }}</div>
+              <div class="options">
+                <button
+                  type="button"
+                  :key="material.id"
+                  :class="{ active: shim.productMaterialsIds?.[shim.state.productId]?.[slot.id] === material.id }"
+                  @click="shim.sendProductMaterial(slot.id, material.id)"
+                  v-for="material in slot.enabledMaterials"
+                >
+                  <img
+                    v-if="material.thumbnailList && material.thumbnailList.length > 1"
+                    :src="material.thumbnailList[1].urlPath"
+                    :alt="material.title"
+                    class="material-thumbnail"
+                  />
+                  <div
+                    v-else-if="material.color"
+                    class="material-thumbnail"
+                    :style="{ backgroundColor: material.color }"
+                  ></div>
+                  <span class="material-name">{{ material.title }}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Scenery Panel (Slides out from icon bar) -->
+        <div class="slide-panel scenery-slide-panel glass-panel" v-if="!sceneryPanelCollapsed && shim.environmentSlots">
+          <div class="panel-header">
+            <h3>Scenery</h3>
+            <button class="close-button" @click="sceneryPanelCollapsed = true">✕</button>
+          </div>
+
+          <div class="panel-content">
+            <!-- Environment Selector -->
+            <div class="options-section">
+              <div class="sub-section-header">Select Environment</div>
+              <div class="options environment-options">
+                <button
+                  type="button"
+                  :key="env.id"
+                  :class="{ active: shim.state.environmentId === env.id }"
+                  @click="shim.sendEnvironment(env.id)"
+                  v-for="env in shim.environments"
+                >
+                  <img
+                    v-if="environmentThumbnails[env.title]"
+                    :src="environmentThumbnails[env.title]"
+                    :alt="env.title"
+                    class="environment-thumbnail"
+                  />
+                  <span class="material-name">{{ env.title }}</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Environment Materials -->
+            <div
+              class="options-section"
+              v-for="slot in shim.environmentSlots"
+              :key="'env-' + slot.id"
+            >
+              <div class="sub-section-header">{{ slot.label }}</div>
+              <div class="options">
+                <button
+                  type="button"
+                  :key="material.id"
+                  :class="{ active: shim.state.environmentMaterialsIds?.[shim.state.environmentId]?.[slot.id] === material.id }"
+                  @click="shim.sendEnvironmentMaterial(slot.id, material.id)"
+                  v-for="material in slot.enabledMaterials"
+                >
+                  {{ material.title }}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Info Panel (Slides out from icon bar) -->
+        <div class="slide-panel info-slide-panel glass-panel" v-if="!infoPanelCollapsed">
+          <div class="panel-header">
+            <h3>Specifications</h3>
+            <button class="close-button" @click="infoPanelCollapsed = true">✕</button>
+          </div>
+
+          <div class="panel-content">
+            <div class="spec-section">
+              <div class="spec-category">Engine</div>
+              <div class="spec-grid">
+                <div class="spec-item">
+                  <div class="spec-label">Type</div>
+                  <div class="spec-value">3.0L Twin-Turbo Flat-6</div>
+                </div>
+                <div class="spec-item">
+                  <div class="spec-label">Horsepower</div>
+                  <div class="spec-value">473 hp @ 6,500 rpm</div>
+                </div>
+                <div class="spec-item">
+                  <div class="spec-label">Torque</div>
+                  <div class="spec-value">420 lb-ft @ 2,300 rpm</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="spec-section">
+              <div class="spec-category">Performance</div>
+              <div class="spec-grid">
+                <div class="spec-item">
+                  <div class="spec-label">0-60 mph</div>
+                  <div class="spec-value">3.5 seconds</div>
+                </div>
+                <div class="spec-item">
+                  <div class="spec-label">Top Speed</div>
+                  <div class="spec-value">191 mph</div>
+                </div>
+                <div class="spec-item">
+                  <div class="spec-label">Quarter Mile</div>
+                  <div class="spec-value">11.6 seconds</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="spec-section">
+              <div class="spec-category">Drivetrain</div>
+              <div class="spec-grid">
+                <div class="spec-item">
+                  <div class="spec-label">Transmission</div>
+                  <div class="spec-value">7-Speed Manual</div>
+                </div>
+                <div class="spec-item">
+                  <div class="spec-label">Drive Type</div>
+                  <div class="spec-value">Rear-Wheel Drive</div>
+                </div>
+                <div class="spec-item">
+                  <div class="spec-label">Weight</div>
+                  <div class="spec-value">3,354 lbs</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="spec-section">
+              <div class="spec-category">Dimensions</div>
+              <div class="spec-grid">
+                <div class="spec-item">
+                  <div class="spec-label">Length</div>
+                  <div class="spec-value">177.9 in</div>
+                </div>
+                <div class="spec-item">
+                  <div class="spec-label">Width</div>
+                  <div class="spec-value">72.9 in</div>
+                </div>
+                <div class="spec-item">
+                  <div class="spec-label">Height</div>
+                  <div class="spec-value">51.0 in</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </template>
+    </div>
+  </body>
+</html>
