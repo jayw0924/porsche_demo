@@ -242,7 +242,7 @@
       <!-- Main Interface (shown when loaded) -->
       <template v-if="shim.state">
         <!-- Top Bar - Logo -->
-        <div class="top-bar glass-panel fade-in">
+        <div class="top-bar glass-panel fade-in" v-if="paintPanelCollapsed && sceneryPanelCollapsed && infoPanelCollapsed">
           <img src="./images/logo.png" alt="Logo" class="logo-image" />
         </div>
 

@@ -734,14 +734,18 @@ body {
     height: calc(100% - 70px);
   }
 
-  /* Material options - single column on mobile */
+  /* Material options - 2x2 grid on mobile */
   .options {
-    grid-template-columns: 1fr;
-    gap: 12px;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
   }
 
   .options button {
-    min-height: 140px;
+    min-height: 120px;
+  }
+
+  .environment-options {
+    grid-template-columns: 1fr;
   }
 
   .environment-options button {
