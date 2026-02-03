@@ -246,6 +246,13 @@
           <img src="./images/logo.png" alt="Logo" class="logo-image" />
         </div>
 
+        <!-- Backdrop for closing panels -->
+        <div
+          class="panel-backdrop"
+          v-if="!paintPanelCollapsed || !sceneryPanelCollapsed || !infoPanelCollapsed"
+          @click="paintPanelCollapsed = true; sceneryPanelCollapsed = true; infoPanelCollapsed = true"
+        ></div>
+
         <!-- Icon Bar Menu -->
         <div class="icon-bar glass-panel fade-in">
           <!-- Top Icons -->
